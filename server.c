@@ -34,11 +34,11 @@ int create_and_bind_socket(struct addrinfo** addrInfo, int* listenFD);
 
 int readMessage(int connectionFD, struct message *msg);
 
-void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skipFD, struct message *msg);
+void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skipFD, struct message *msg, int* cleanupList, size_t* cleanupCount);
 
 int main(int argc, char** argv)
 {
-    signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN); // So sudden disconnects doesn't completely crash the program!
     int status, returnCode = 0;
     int listenFD = -1;
     size_t maxConnections = INITIAL_CLIENT_CONNECTIONS;
@@ -209,7 +209,7 @@ int main(int argc, char** argv)
         for(int i = 0 ; i < maxConnections; ++i)
         {   
             if(connectionPollValue == 0) break; // No socket events
-            if(!clients[i].isConnected) continue;
+            if(!clients[i].isConnected || clients[i].connectionFD == -1) continue;
 
             // Check the return events
             connectionReturnEvents = clientDescriptors[i].revents;
@@ -222,7 +222,23 @@ int main(int argc, char** argv)
                 if(readMessage(clients[i].connectionFD, &msg) == 0)
                 {
                     printf("Message Length: %u, Message Type: %u, Message Contents: %s\n", msg.msg_length, msg.msg_type, msg.msg);
-                    broadcastMessage(&clientUseList, &clients, clients[i].connectionFD, &msg);
+                    int cleanupList[maxConnections];
+                    size_t cleanupCount = 0;
+                    broadcastMessage(&clientUseList, &clients, clients[i].connectionFD, &msg, cleanupList, &cleanupCount);
+                    
+                    for(size_t j = 0 ; j < cleanupCount; ++j)
+                    {
+                        size_t clientIndex = cleanupList[j];
+                        printf("Cleanup client index %zu\n", clientIndex);
+                        close(clients[clientIndex].connectionFD);
+                        clients[clientIndex].isConnected = false;
+                        clients[clientIndex].connectionFD = -1;
+                        clientDescriptors[clientIndex].fd = -1;
+                        removeNode(&clientUseList, clientIndex);
+                        insertNode(&clientIndexQueue, clientIndex);
+                        printf("Connection Removed, Sudden Disconnect!\n");
+                    }
+                    
                 }
                 
             }
@@ -301,10 +317,11 @@ int create_and_bind_socket(struct addrinfo** addrInfo, int* listenFD)
 
 int readMessage(int connectionFD, struct message *msg)
 {
+    if(connectionFD == -1) return -1;
     return recv_message(connectionFD, msg);
 }
 
-void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skipFD, struct message *msg)
+void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skipFD, struct message *msg, int* cleanupList, size_t* cleanupCount)
 {
     if((*clientUseList)->nodeCount == 0 || (*clientUseList)->headNode == NULL) return;
     node *sendClientIndexNode = (*clientUseList)->headNode;
@@ -312,7 +329,7 @@ void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skip
     while(sendClientIndexNode != NULL)
     {
         int sendClientFD = (*clientList)[sendClientIndexNode->val].connectionFD;
-        if(sendClientFD == skipFD)
+        if(sendClientFD == skipFD || sendClientFD == -1)
         {
             sendClientIndexNode = sendClientIndexNode->next;
             continue;
@@ -321,6 +338,8 @@ void broadcastMessage(linkedNodes **clientUseList, client **clientList, int skip
         if(send_message(sendClientFD, msg->msg_type, msg->msg, msg->msg_length) != 0)
         {
             perror("Error sending message to a client");
+            cleanupList[(*cleanupCount)++] = sendClientIndexNode->val;
+            printf("Added %d to cleanup List\n", sendClientIndexNode->val);
         }
         sendClientIndexNode = sendClientIndexNode->next;
     }

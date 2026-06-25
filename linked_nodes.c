@@ -22,18 +22,25 @@ void removeNode(linkedNodes** l, int val)
 
     if((*l)->nodeCount == 0 || current == NULL) return;
 
-    while(current->val != val)
+    while(current!= NULL && current->val != val)
     {
         prev = current;
         current = current->next;
     }
 
-    if(current != NULL)
+    if(current == NULL) return;
+
+    if(prev == NULL) // headnode removal
+    {
+        (*l)->headNode = current->next;
+    }
+    else
     {
         prev->next = current->next;
-        free(current);
-        current = NULL;
     }
+    
+    free(current);
+    (*l)->nodeCount--;
     
 }
 

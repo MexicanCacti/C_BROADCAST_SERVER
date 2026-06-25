@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
 
 /*
     length - Length of msg in message

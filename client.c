@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 
     sleep(10);
 
-    char* msg  = "zzzz";
+    char* msg  = "vcvcvcv";
     size_t len = strlen(msg);
 
     while(1)
