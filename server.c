@@ -22,6 +22,29 @@
 #define LISTEN_IP "127.0.0.1"
 #define INITIAL_CLIENT_CONNECTIONS 10
 
+/*
+    V. Basic model in the future...
+    
+    Note, both sockets should be non-blocking
+    RECV
+    - Check if socket readable
+    - Read as much as is available
+    - Append to an input buffer
+    - When input buffer contains at least one complete framed message, parse, remove from input buffer, append serialized message to other clients' output buffer
+
+
+    SEND
+    - Enable POLLOUT when client has queued output
+    - When Pollout is set...
+    - Remove/Send as many bytes from the client's output buffer as possible
+    - If send returns EAGAIN/EWOULDBLOCK, stop sending & wait for next POLLOUT
+    - Disable POLLOUT only when output buffer is empty
+
+    For the output buffer, can eventually get too large, when it does, either disconnect client, drop messages, or apply queue limit
+
+
+*/
+
 struct client
 {
     int connectionFD;
@@ -159,6 +182,8 @@ int main(int argc, char** argv)
                 continue;
             }
 
+            setsockopt(connectionFD, SOL_SOCKET, SO_RCVTIMEO, 0, 0);
+            setsockopt(connectionFD, SOL_SOCKET, SO_SNDTIMEO, 0, 0);
             char connectionIP[INET_ADDRSTRLEN];
             char connectionPort[NI_MAXSERV];
 
@@ -224,6 +249,8 @@ int main(int argc, char** argv)
                     printf("Message Length: %u, Message Type: %u, Message Contents: %s\n", msg.msg_length, msg.msg_type, msg.msg);
                     int cleanupList[maxConnections];
                     size_t cleanupCount = 0;
+                    // Note currently we just send the message to the client w/out checking readiness... future reference:
+                    //  Per-client output buffer, only send when POLLOUT event is set
                     broadcastMessage(&clientUseList, &clients, clients[i].connectionFD, &msg, cleanupList, &cleanupCount);
                     
                     for(size_t j = 0 ; j < cleanupCount; ++j)

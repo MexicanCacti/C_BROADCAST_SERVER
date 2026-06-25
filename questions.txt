@@ -1,0 +1,58 @@
+1. Why is the following loop insufficient:
+    while (1)
+    {
+        accept(...);
+        recv(...);
+    }
+
+    Besides not broadcasting to other connected clients, the server would only be able to accept one client and then recv only 1 message from that client. If the client wants to send another
+    message to the server, then it has to attempt to connect again & wait until it is selected from the pool of other clients trying to connect. Additionally, if a slow client never sends a message,
+    the server will forever block while waiting to recv a message.
+
+2. What problem does poll() solve?
+    Poll allows the server to check for messages from more than one client at a time. It also solves the issue of a slow client blocking the entire server!
+
+3. What infomration does poll() return?
+    As its return value, poll returns the number of socket file descriptors that contained some sort of socket events. The codes for these events are returned in poll's connection return events & events list
+
+4. What does POLLIN mean?
+    POLLIN means that the socket has some sort of data to read from the socket. Note not the full recv bytes may be available, just some are
+
+5. What does POLLOUT mean?
+    POLLOUT means that the socket is ready to have some data written to it.
+
+6. Why can one blocking client freeze an entire server?
+    This question is similar to question 1, a blocked client can freeze an entire server if the server continuously awaits a message from a client. While recving from that client, it is unable to handle other requests.
+
+7. What should happen when recv() == 0 for a client?
+    When recv() == 0, then on the server's side, it should perform some sort of cleanup on the client socket. This includes closing the socket. 
+
+8. Why is removing disconnected clients important?
+    Removing disconnected clients is important to return resources back to the server. If that disconnected socket is never removed, then the resources allocated to that client are never freed. Additionally, attempting to
+    send/read from that socket could block the server.
+
+9. What happens if a client disconnects and its socket remains in your client table?
+    If a client disconnects & its socket remains in the client table, then the file descriptor for that socket and any allocated resources are leaked. Additionally, the server will attempt to send to that client which causes a block.
+    Also the send will fail.
+
+10. Why is broadcasting harder than echoing?
+    Broadcasting is harder since now multiple clients have to be tracked & handled correctly when sending & receiving messages.
+
+11. Suppose: A sends 1 message, 100 clients connected, how many sends may the server perform?
+    The number of sends the server performs will depend heavily on the size in bytes of the message. Formulaically, the number of sends will be:
+    (# of sends needed to send the full bytes of the message ) x 99. 
+    This is because the server needs to send the message to every other client besides A.
+
+12. Why should a server avoid trusting clients to behave correctly?
+    THe serevr should always prepare for the worst so that client misbehavior whether accidental or malicious doesn't cause the server to completely crash.
+
+13. What is backpressure?
+    Backpressure is basically tyhe ammount of traffic a server receives. In this case, the server polls, so the more connections the server has to poll & broadcast, the slower the server runs.
+    ...
+    Actually its a term that means downstream consumers cannot keep up with the upstream. Like the data for that consumer socket starts to bloat on the server side b/c the client can't read fast enough
+
+14. Why might a client stop reading data?
+    One reason why a client might stop reading data is due to a sudden program crash/kill.
+
+15. Whats the difference between connection management & message handling?
+    Connection management has to do more with correctly handling socket connections. Message handling is more to do with the contents that are passed to/from each socket.
